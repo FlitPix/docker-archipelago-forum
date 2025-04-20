@@ -1,0 +1,96 @@
+# This sets up Traefik on the host machine, as a reverse proxy behind which the board can be accessed.
+# I did this because I was already running other services on the same VPS.
+
+# If you are okay with this,
+# - Replace all instances of DOMAIN.TLD with your top-level domain.
+# - Follow the other comments in this file.
+
+# Otherwise, feel free to remove all the Traefik stuff, and use a different reverse proxy, or none at all.
+
+services:
+  reverse-proxy:
+    image: traefik:v2.10
+    restart: unless-stopped
+    ports:
+      - 80:80
+      - 443:443
+    volumes:
+      - ./letsencrypt:/letsencrypt
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    command:
+      - "--api"
+      - "--ping"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--certificatesresolvers.myresolver.acme.tlschallenge=true"
+      - "--certificatesresolvers.myresolver.acme.email=YOUREMAILHERE" # Put your email here to register SSL on your domain using Let's Encrypt. You should probably do this. If for some reason you don't, remove all certificatesresolvers, websecure, and https lines in this file.
+      - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json"
+    labels:
+      # Dashboard configuration (SSL, subdomain)
+      - "traefik.enable=true"
+
+      - "traefik.http.routers.traefik_https.rule=Host(`traefik.DOMAIN.TLD`) && (PathPrefix(`/api`) || PathPrefix(`/dashboard`))"
+      - "traefik.http.routers.traefik_https.entrypoints=websecure"
+      - "traefik.http.routers.traefik_https.tls.certresolver=myresolver"
+      - "traefik.http.routers.traefik_https.service=api@internal"
+      - "traefik.http.routers.traefik_https.middlewares=traefik-auth"
+
+      - "traefik.http.middlewares.traefik-auth.basicauth.users=USERNAME:BCRYPTHASH" # Replace USERNAME with a desired username, and BCRYPTHASH with a bcrypt-hashed password, which will be used for the Traefik dashboard. You can use htpasswd, or https://bcrypt.online/
+
+      - "traefik.http.routers.traefik_http.rule=Host(`traefik.DOMAIN.TLD`) && (PathPrefix(`/api`) || PathPrefix(`/dashboard`))"
+      - "traefik.http.routers.traefik_http.entrypoints=web"
+      - "traefik.http.routers.traefik_http.middlewares=https_redirect"
+
+      - "traefik.http.middlewares.https_redirect.redirectscheme.scheme=https"
+      - "traefik.http.middlewares.https_redirect.redirectscheme.permanent=true"
+
+      - "traefik.http.middlewares.redirect-dashboard.redirectregex.regex=^https://traefik.flitpix.net(/?)"
+      - "traefik.http.middlewares.redirect-dashboard.redirectregex.replacement=https://traefik.flitpix.net/dashboard/"
+
+  forum_db:
+    image: mariadb:11.7.2
+    container_name: apforum_db
+    hostname: forum_db
+    restart: always
+    environment:
+      MARIADB_DATABASE: ap_forum
+      MARIADB_ROOT_PASSWORD_FILE: /run/secrets/forum_db_root_password
+      MARIADB_PASSWORD_FILE: /run/secrets/forum_db_password
+      MARIADB_USER: ap_forum
+    volumes:
+      - forum_db_data:/var/lib/mysql
+    secrets:
+      - forum_db_password
+      - forum_db_root_password
+  forum:
+    build:
+      context: build/forum
+    container_name: apforum
+    restart: always
+    volumes:
+      - forum_html:/var/www/html/
+    depends_on:
+      - forum_db
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.website_http.rule=Host(`apforum.DOMAIN.TLD`)"
+      - "traefik.http.routers.website_http.middlewares=redirect-https-website"
+      - "traefik.http.routers.website_http.entrypoints=web"
+
+      - "traefik.http.middlewares.redirect-https-website.redirectscheme.scheme=https"
+
+      - "traefik.http.routers.website_https.rule=Host(`apforum.DOMAIN.TLD`)"
+      - "traefik.http.routers.website_https.entrypoints=websecure"
+      - "traefik.http.routers.website_https.tls.certresolver=myresolver"
+
+secrets:
+  forum_db_password:
+    file: ./db_password.txt
+  forum_db_root_password:
+    file: ./db_root_password.txt
+
+volumes:
+  forum_db_data:
+  forum_html:

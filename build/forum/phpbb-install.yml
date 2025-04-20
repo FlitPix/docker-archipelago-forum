@@ -1,0 +1,40 @@
+# Some additional documentation on phpBB's installation yml can be found here: https://area51.phpbb.com/docs/dev/3.3.x/cli/getting_started.html#install-phpbb-using-the-cli
+installer:
+  admin:
+    name: USERNAME # Replace USERNAME with your admin account username.
+    password: P@$$w0rd # Replace P@$$w0rd with your admin account password.
+    email: a@b.com # Replace a@b.com with your admin account email address (if used for local dev, this will actually work and you can leave it alone).
+
+  board:
+    lang: en
+    name: "Archipelago Forum"
+    description: "Unofficial forum board for the multiworld multi-game randomizer"
+
+  database:
+    dbms: mysqli
+    dbhost: forum_db
+    dbport: ~
+    dbuser: ap_forum
+    dbpasswd: P@$$w0rd # Replace P@$$w0rd with the contents of db_password.txt.
+    dbname: ap_forum
+    table_prefix: phpbb_
+
+  email:
+    enabled: false
+    smtp_delivery: ~
+    smtp_host: ~
+    smtp_port: ~
+    smtp_auth: ~
+    smtp_user: ~
+    smtp_pass: ~
+
+  server: # These can be ignored unless you know you need to use them.
+    cookie_secure: true
+    server_protocol: http://
+    force_server_vars: false
+    server_name: localhost
+    server_port: 80
+    script_path: /
+
+  # You can either list extensions you want to auto enable here, or leave it blank and manually enable them in the ACP. Not all extensions work with this.
+  extensions: []
